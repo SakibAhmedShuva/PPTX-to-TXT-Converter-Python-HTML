@@ -1,0 +1,4 @@
+Flask==3.1.1
+flask_cors==5.0.1
+python_pptx==1.0.2
+Werkzeug==3.1.3
