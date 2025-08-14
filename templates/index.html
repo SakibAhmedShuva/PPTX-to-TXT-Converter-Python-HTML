@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PPTX Converter</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; background-color: #f5f5f5; }
+        .container { background-color: white; padding: 30px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        h1 { color: #333; text-align: center; margin-bottom: 30px; }
+        .upload-area { border: 2px dashed #ddd; border-radius: 10px; padding: 40px; text-align: center; margin-bottom: 20px; transition: border-color 0.3s; }
+        .upload-area:hover, .upload-area.dragover { border-color: #4CAF50; }
+        button { background-color: #4CAF50; color: white; padding: 12px 24px; border: none; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 10px 5px; }
+        button:hover { background-color: #45a049; }
+        button:disabled { background-color: #cccccc; cursor: not-allowed; }
+        .result-area { margin-top: 20px; }
+        textarea { width: 100%; height: 600px; padding: 15px; border: 1px solid #ddd; border-radius: 5px; font-family: monospace; box-sizing: border-box; resize: vertical; }
+        iframe { width: 100%; height: 600px; border: 1px solid #ddd; border-radius: 5px; }
+        .loading { display: none; text-align: center; color: #4CAF50; font-weight: bold; }
+        .message-box { padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .error { color: #d32f2f; background-color: #ffebee; }
+        .success { color: #2e7d32; background-color: #e8f5e8; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📄 PPTX Converter</h1>
+        <div class="upload-area" id="uploadArea">
+            <p>📎 Drag and drop your PPTX file here or click to select</p>
+            <input type="file" id="fileInput" accept=".pptx,.ppt" style="display: none;">
+            <button onclick="document.getElementById('fileInput').click()">Choose File</button>
+        </div>
+        
+        <div>
+            <button id="textBtn" onclick="convertToText()" disabled>Convert to Text</button>
+            <button id="pdfBtn" onclick="convertToPdf()" disabled>View as PDF</button>
+            <button id="downloadBtn" onclick="downloadText()" disabled>Download Text</button>
+        </div>
+        
+        <div class="loading" id="loading"></div>
+        <div id="message"></div>
+        
+        <div class="result-area" id="textResultContainer">
+            <textarea id="resultText" placeholder="Converted text will appear here..."></textarea>
+        </div>
+        
+        <div class="result-area" id="pdfResultContainer" style="display:none;">
+            <iframe id="pdfViewer" title="PDF Viewer"></iframe>
+        </div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadArea = document.getElementById('uploadArea');
+        const textBtn = document.getElementById('textBtn');
+        const pdfBtn = document.getElementById('pdfBtn');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const loading = document.getElementById('loading');
+        const message = document.getElementById('message');
+        const resultText = document.getElementById('resultText');
+        const textResultContainer = document.getElementById('textResultContainer');
+        const pdfResultContainer = document.getElementById('pdfResultContainer');
+        const pdfViewer = document.getElementById('pdfViewer');
+        
+        let selectedFile = null;
+        let convertedText = '';
+
+        fileInput.addEventListener('change', e => handleFileSelect(e.target.files));
+        uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+        uploadArea.addEventListener('dragleave', e => { e.preventDefault(); uploadArea.classList.remove('dragover'); });
+        uploadArea.addEventListener('drop', e => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            handleFileSelect(e.dataTransfer.files);
+        });
+
+        function handleFileSelect(files) {
+            if (files.length > 0) {
+                selectedFile = files[0];
+                uploadArea.innerHTML = `<p>📄 Selected: ${selectedFile.name}</p>`;
+                textBtn.disabled = false;
+                pdfBtn.disabled = false;
+                downloadBtn.disabled = true;
+                resultText.value = '';
+                pdfViewer.src = 'about:blank';
+            }
+        }
+
+        function showMessage(text, type, duration = 5000) {
+            message.innerHTML = `<div class="message-box ${type}">${text}</div>`;
+            if (duration) setTimeout(() => { message.innerHTML = ''; }, duration);
+        }
+
+        function setLoading(isLoading, text = '') {
+            loading.style.display = isLoading ? 'block' : 'none';
+            loading.innerText = text;
+        }
+
+        function showTextViewer() {
+            pdfResultContainer.style.display = 'none';
+            textResultContainer.style.display = 'block';
+        }
+
+        function showPdfViewer() {
+            textResultContainer.style.display = 'none';
+            pdfResultContainer.style.display = 'block';
+        }
+
+        async function convertToText() {
+            if (!selectedFile) return;
+            setLoading(true, '🔄 Converting to text...');
+            showTextViewer();
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/api/convert-to-text', { method: 'POST', body: formData });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error);
+
+                convertedText = data.text;
+                resultText.value = convertedText;
+                downloadBtn.disabled = false;
+                showMessage('✅ Text extraction successful!', 'success');
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+                downloadBtn.disabled = true;
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function convertToPdf() {
+            if (!selectedFile) return;
+            setLoading(true, '🔄 Converting to PDF... this may take a moment.');
+            showPdfViewer();
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            try {
+                const response = await fetch('/api/convert-to-pdf', { method: 'POST', body: formData });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || 'PDF conversion failed on the server.');
+                }
+                const blob = await response.blob();
+                const url = URL.createObjectURL(blob);
+                pdfViewer.src = url;
+                showMessage('✅ PDF conversion successful!', 'success');
+            } catch (error) {
+                showMessage(`❌ Error: ${error.message}`, 'error');
+                showTextViewer(); // Switch back to text view on error
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function downloadText() {
+            if (!convertedText) return;
+            const blob = new Blob([convertedText], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${selectedFile.name.rsplit('.', 1)[0]}_converted.txt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        String.prototype.rsplit = function(sep, maxsplit) {
+            var split = this.split(sep);
+            return maxsplit ? [ split.slice(0, -maxsplit).join(sep) ].concat(split.slice(-maxsplit)) : split;
+        }
+    </script>
+</body>
+</html>
